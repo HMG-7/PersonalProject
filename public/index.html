@@ -56,6 +56,22 @@
     flex: 1;
   }
 
+  .btn-export-all{
+  padding:10px 18px;
+  font-size:15px;
+  font-weight:600;
+  background:#00FF00;
+  color:#080808;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  height: fit-content;
+ 
+
+}
+.btn-export-all:hover{opacity:.9}
+
+
   .navbar .datetime {
     color: #00FF00;
     flex: 1;
@@ -279,6 +295,11 @@
   box-shadow: 0 0 12px rgba(0,255,0,0.4);
 }
 
+.ex-container{
+  display:flex;
+  justify-content: flex-end;
+
+}
 
 </style>
 </head>
@@ -367,7 +388,13 @@
 
   <!-- Extras Section -->
    <div id="extras" class="section-container">
+    
   <h2>Extras</h2>
+  <div class="ex-container">
+  <button class="btn-export-all" onclick="exportAllEmployeesPDF()">
+  Export All Employees (PDF)
+</button>
+</div>
 <div id="extraSections"></div>
   
   
@@ -378,6 +405,35 @@
 
 
 <script>
+
+
+// ================= OFFLINE DB (ADD HERE) =================
+let offlineDB;
+
+const dbRequest = indexedDB.open("omsriram_offline_db", 2);
+
+dbRequest.onupgradeneeded = e => {
+  const db = e.target.result;
+
+  if (!db.objectStoreNames.contains("employees")) {
+    db.createObjectStore("employees", { keyPath: "name" });
+  }
+
+  if (!db.objectStoreNames.contains("weekly")) {
+    db.createObjectStore("weekly", { keyPath: ["name", "date"] });
+  }
+};
+
+dbRequest.onsuccess = e => {
+  offlineDB = e.target.result;
+  console.log("✅ Offline DB Ready");
+  loadEmployeesFromDB(); // 🔥 restore names on refresh
+};
+
+dbRequest.onerror = () => console.error("❌ IndexedDB Error");
+
+
+
   // Section toggle
   function showSection(id) {
     document.querySelectorAll('.section-container').forEach(sec => sec.classList.remove('active'));
@@ -616,10 +672,62 @@ function appendRowToSection(sectionEl,rowData=null){
   });
 
   tr.querySelectorAll('input[name="day_shift"], input[name="night_shift"]').forEach(i=>{
-    i.addEventListener('input', ()=>updateSectionPointsFromInput(i));
+  i.addEventListener('input', ()=>{
+    updateSectionPointsFromInput(i);
+
+    const date = tr.querySelector('input[name="date"]').value;
+    saveWeeklyToDB(sectionEl.dataset.name, date,
+      tr.querySelector('input[name="day_shift"]').value,
+      tr.querySelector('input[name="night_shift"]').value
+    );
   });
+});
+
   return tr;
 }
+
+
+// ================= SAVE WEEKLY =================
+function saveWeeklyToDB(name, date, day, night) {
+  if (!offlineDB || !date) return;
+
+  const tx = offlineDB.transaction("weekly", "readwrite");
+  tx.objectStore("weekly").put({
+    name,
+    date,
+    day: Number(day) || 0,
+    night: Number(night) || 0
+  });
+}
+
+
+// ================= LOAD WEEKLY =================
+function loadWeeklyFromDB(section) {
+  if (!offlineDB) return;
+
+  const name = section.dataset.name;
+  const tx = offlineDB.transaction("weekly", "readonly");
+  const store = tx.objectStore("weekly");
+
+  store.openCursor().onsuccess = e => {
+    const cursor = e.target.result;
+    if (!cursor) return;
+
+    const r = cursor.value;
+    if (r.name === name) {
+      const row = [...section.querySelectorAll("tbody tr")]
+        .find(tr => tr.querySelector('input[name="date"]').value === r.date);
+
+      if (row) {
+        row.querySelector('input[name="day_shift"]').value = r.day;
+        row.querySelector('input[name="night_shift"]').value = r.night;
+        updateSectionPointsFromInput(row.querySelector('input[name="day_shift"]'));
+      }
+    }
+    cursor.continue();
+  };
+}
+
 
 // ------------------- Sync Points to Salary -------------------
 function updateSectionPointsFromInput(input){
@@ -675,6 +783,7 @@ document.querySelector(selectors.createSectionsBtn).addEventListener('click',()=
   const names=(document.querySelector(selectors.namesInput).value||'').split(',').map(s=>s.trim()).filter(Boolean);
   if(!names.length) return showToast('Enter at least one name',true);
   names.forEach(n=>{
+    saveEmployeeToDB(n);
     if(!document.querySelector(`#sections .section[data-name="${CSS.escape(n)}"]`)) createSectionElement(n);
     if(!findSalaryRowByName(n)) addSalaryRow({name:n,readonlyName:true}); 
     if(!document.querySelector(`#extraSections .extra-section[data-name="${CSS.escape(n)}"]`))
@@ -706,10 +815,39 @@ document.querySelectorAll('#salaryTable tbody tr').forEach(row => {
     dates.forEach(dateIso=>{
       const exists=Array.from(tbody.querySelectorAll('input[name="date"]')).some(i=>i.value===dateIso);
       if(!exists) appendRowToSection(sec,{date:dateIso});
+      loadWeeklyFromDB(sec);
     });
   });
   showToast(`Rows created for ${dates.length} day(s)`);
 });
+
+
+// ================= SAVE EMPLOYEE =================
+function saveEmployeeToDB(name) {
+  if (!offlineDB) return;
+  const tx = offlineDB.transaction("employees", "readwrite");
+  tx.objectStore("employees").put({ name });
+}
+
+
+// ================= LOAD EMPLOYEES =================
+function loadEmployeesFromDB() {
+  if (!offlineDB) return;
+
+  const tx = offlineDB.transaction("employees", "readonly");
+  const store = tx.objectStore("employees");
+
+  store.getAll().onsuccess = e => {
+    e.target.result.forEach(emp => {
+      if(!document.querySelector(`#sections .section[data-name="${CSS.escape(emp.name)}"]`)) {
+        createSectionElement(emp.name);
+        addSalaryRow({name: emp.name, readonlyName: true});
+        createExtraSectionElement(emp.name);
+      }
+    });
+  };
+}
+
 
 // Delegate section-level buttons
 document.querySelector('#sections').addEventListener('click', e => {
@@ -1102,6 +1240,162 @@ function getFinalSummary(name) {
     totalAmount: (paidSalary + extraTotal).toFixed(2)
   };
 }
+
+function safeValue(el) {
+  if (!el) return 0;
+  if (el.value === undefined || el.value === null || el.value === "") return 0;
+  return el.value;
+}
+
+function exportAllEmployeesPDF() {
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const from = document.getElementById("fromDate")?.value || "";
+  const to = document.getElementById("toDate")?.value || "";
+
+  const weeklySections = document.querySelectorAll("#sections .section");
+
+  if (!weeklySections.length) {
+    alert("No employees found");
+    return;
+  }
+
+  weeklySections.forEach((section, index) => {
+
+    if (index > 0) doc.addPage();
+
+    const name = section.dataset.name || "Employee";
+
+    /* ---------- HEADER ---------- */
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text("OM SRI RAM TRADERS", pageWidth / 2, 15, { align: "center" });
+
+    doc.setFontSize(14);
+    doc.text(`Employee Report : ${name}`, pageWidth / 2, 23, { align: "center" });
+
+    /* ---------- DATE RANGE ---------- */
+    doc.autoTable({
+  startY: 30,
+  head: [["DATE RANGE", ":",from + " to "+ to]],
+  theme: "grid",
+  styles: {
+    halign: "center",
+    fontStyle: "bold",
+    fontSize: 11
+  },
+   headStyles: {
+   
+    textColor: [0, 0, 0]
+  }
+
+});
+    let y = doc.lastAutoTable.finalY + 6;
+
+    /* ---------- WEEKLY TABLE ---------- */
+    const weeklyRows = [];
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      const tds = tr.querySelectorAll("td input");
+      weeklyRows.push([
+        safeValue(tds[0]),
+        safeValue(tds[1]),
+        safeValue(tds[2])
+      ]);
+    });
+
+    if (weeklyRows.length) {
+      doc.autoTable({
+        startY: y,
+        head: [["Date", "Day Shift", "Night Shift"]],
+        body: weeklyRows,
+        theme: "grid",
+        
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    /* ---------- SALARY TABLE (FULL SAFE) ---------- */
+    const salaryRow = findSalaryRowByName(name);
+
+    if (salaryRow) {
+      const inputs = salaryRow.querySelectorAll("input");
+
+      const salaryBody = [
+        ["Points", safeValue(inputs[1])],
+        ["Amount", safeValue(inputs[2])],
+        ["No of Paavu", safeValue(inputs[3])],
+        ["Paavu Katta", safeValue(inputs[4])],
+        ["Maistery Amount", safeValue(inputs[5])],
+        ["Advance Weekly", safeValue(inputs[6])],
+        ["Advance Monthly", safeValue(inputs[7])],
+        ["Last Week Balance", safeValue(inputs[8]?.querySelector("input"))],
+        ["Total Amount", safeValue(inputs[9])],
+        ["Round Off", safeValue(inputs[10])],
+        ["Paid Salary", safeValue(inputs[11])],
+        ["Bonus", safeValue(inputs[12])],
+        ["Final Amount", safeValue(inputs[13])]
+      ];
+
+      doc.autoTable({
+        startY: y,
+        head: [["Salary Details", "Value"]],
+        body: salaryBody,
+        theme: "grid",
+        styles: { halign: "center" },
+        
+      });
+
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    /* ---------- EXTRA TABLE ---------- */
+    const extraTable = document.querySelector(`#extraTable-${name}`);
+    if (extraTable) {
+      const extraRows = [];
+      extraTable.querySelectorAll("tbody tr").forEach(tr => {
+        const inputs = tr.querySelectorAll("input");
+        extraRows.push([
+          safeValue(inputs[0]),
+          safeValue(inputs[1])
+        ]);
+      });
+
+      if (extraRows.length) {
+        doc.autoTable({
+          startY: y,
+          head: [["Extra Name", "Amount"]],
+          body: extraRows,
+          theme: "grid",
+         
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      }
+    }
+
+    /* ---------- FINAL TOTAL ---------- */
+    const paidSalary = safeValue(document.getElementById(`extra-${name}`));
+    const totalAmount = safeValue(document.getElementById(`total-${name}`));
+
+    doc.autoTable({
+      startY: y,
+      head: [["PAID SALARY", "TOTAL AMOUNT"]],
+      body: [[paidSalary, totalAmount]],
+      theme: "grid",
+      styles: { halign: "center", fontStyle: "bold" },
+       
+    });
+
+  });
+
+  doc.save(`${from}_to_${to}.pdf`);
+}
+
+
+
+
 
 
 
