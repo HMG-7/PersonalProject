@@ -405,35 +405,7 @@
 
 
 <script>
-
-
-// ================= OFFLINE DB (ADD HERE) =================
-let offlineDB;
-
-const dbRequest = indexedDB.open("omsriram_offline_db", 2);
-
-dbRequest.onupgradeneeded = e => {
-  const db = e.target.result;
-
-  if (!db.objectStoreNames.contains("employees")) {
-    db.createObjectStore("employees", { keyPath: "name" });
-  }
-
-  if (!db.objectStoreNames.contains("weekly")) {
-    db.createObjectStore("weekly", { keyPath: ["name", "date"] });
-  }
-};
-
-dbRequest.onsuccess = e => {
-  offlineDB = e.target.result;
-  console.log("✅ Offline DB Ready");
-  loadEmployeesFromDB(); // 🔥 restore names on refresh
-};
-
-dbRequest.onerror = () => console.error("❌ IndexedDB Error");
-
-
-
+  
   // Section toggle
   function showSection(id) {
     document.querySelectorAll('.section-container').forEach(sec => sec.classList.remove('active'));
@@ -466,6 +438,24 @@ dbRequest.onerror = () => console.error("❌ IndexedDB Error");
     if (totalInput) totalInput.value = paidSalary + extraTotal;
   });
 }
+
+
+function saveWeeklyData() {
+  const data = {};
+  document.querySelectorAll("#sections .section").forEach(section => {
+    const name = section.dataset.name;
+    data[name] = [];
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      data[name].push({
+        date: tr.querySelector('[name="date"]').value,
+        day: tr.querySelector('[name="day_shift"]').value,
+        night: tr.querySelector('[name="night_shift"]').value
+      });
+    });
+  });
+  localStorage.setItem("weeklyData", JSON.stringify(data));
+}
+
 
 
   // Clock and date
@@ -559,6 +549,9 @@ function addSalaryRow(data={}) {
   document.querySelector('#salaryTable tbody').appendChild(tr);
   tr.querySelectorAll('input').forEach(inp => {
   inp.addEventListener('input', () => calculateRowTotal(tr));
+});
+tr.querySelectorAll("input").forEach(inp => {
+  inp.addEventListener("input", saveSalaryData);
 });
   calculateRowTotal(tr);
   // Add + and - button functionality
@@ -657,7 +650,7 @@ function appendRowToSection(sectionEl,rowData=null){
   saveBtn.addEventListener('click', ()=>{
     const inputs = tr.querySelectorAll('input');
     if(saveBtn.innerText==='Save'){
-      inputs.forEach(i=>i.disabled=true);
+      inputs.forEach(i=>i.disabled=true); 
       saveBtn.innerText='Edit';
     } else {
       inputs.forEach(i=>i.disabled=false);
@@ -672,62 +665,13 @@ function appendRowToSection(sectionEl,rowData=null){
   });
 
   tr.querySelectorAll('input[name="day_shift"], input[name="night_shift"]').forEach(i=>{
-  i.addEventListener('input', ()=>{
-    updateSectionPointsFromInput(i);
-
-    const date = tr.querySelector('input[name="date"]').value;
-    saveWeeklyToDB(sectionEl.dataset.name, date,
-      tr.querySelector('input[name="day_shift"]').value,
-      tr.querySelector('input[name="night_shift"]').value
-    );
+    i.addEventListener('input', ()=>updateSectionPointsFromInput(i));
   });
+  tr.querySelectorAll("input").forEach(i => {
+  i.addEventListener("input", saveWeeklyData);
 });
-
   return tr;
 }
-
-
-// ================= SAVE WEEKLY =================
-function saveWeeklyToDB(name, date, day, night) {
-  if (!offlineDB || !date) return;
-
-  const tx = offlineDB.transaction("weekly", "readwrite");
-  tx.objectStore("weekly").put({
-    name,
-    date,
-    day: Number(day) || 0,
-    night: Number(night) || 0
-  });
-}
-
-
-// ================= LOAD WEEKLY =================
-function loadWeeklyFromDB(section) {
-  if (!offlineDB) return;
-
-  const name = section.dataset.name;
-  const tx = offlineDB.transaction("weekly", "readonly");
-  const store = tx.objectStore("weekly");
-
-  store.openCursor().onsuccess = e => {
-    const cursor = e.target.result;
-    if (!cursor) return;
-
-    const r = cursor.value;
-    if (r.name === name) {
-      const row = [...section.querySelectorAll("tbody tr")]
-        .find(tr => tr.querySelector('input[name="date"]').value === r.date);
-
-      if (row) {
-        row.querySelector('input[name="day_shift"]').value = r.day;
-        row.querySelector('input[name="night_shift"]').value = r.night;
-        updateSectionPointsFromInput(row.querySelector('input[name="day_shift"]'));
-      }
-    }
-    cursor.continue();
-  };
-}
-
 
 // ------------------- Sync Points to Salary -------------------
 function updateSectionPointsFromInput(input){
@@ -783,10 +727,9 @@ document.querySelector(selectors.createSectionsBtn).addEventListener('click',()=
   const names=(document.querySelector(selectors.namesInput).value||'').split(',').map(s=>s.trim()).filter(Boolean);
   if(!names.length) return showToast('Enter at least one name',true);
   names.forEach(n=>{
-    saveEmployeeToDB(n);
     if(!document.querySelector(`#sections .section[data-name="${CSS.escape(n)}"]`)) createSectionElement(n);
     if(!findSalaryRowByName(n)) addSalaryRow({name:n,readonlyName:true}); 
-    if(!document.querySelector(`#extraSections .extra-section[data-name="${CSS.escape(n)}"]`))
+    if(!document.querySelector(`#extraSections .extra-section[data-name="${CSS.escape(n+ "_extra")}"]`))
         createExtraSectionElement(n);
   });
 });
@@ -815,39 +758,10 @@ document.querySelectorAll('#salaryTable tbody tr').forEach(row => {
     dates.forEach(dateIso=>{
       const exists=Array.from(tbody.querySelectorAll('input[name="date"]')).some(i=>i.value===dateIso);
       if(!exists) appendRowToSection(sec,{date:dateIso});
-      loadWeeklyFromDB(sec);
     });
   });
   showToast(`Rows created for ${dates.length} day(s)`);
 });
-
-
-// ================= SAVE EMPLOYEE =================
-function saveEmployeeToDB(name) {
-  if (!offlineDB) return;
-  const tx = offlineDB.transaction("employees", "readwrite");
-  tx.objectStore("employees").put({ name });
-}
-
-
-// ================= LOAD EMPLOYEES =================
-function loadEmployeesFromDB() {
-  if (!offlineDB) return;
-
-  const tx = offlineDB.transaction("employees", "readonly");
-  const store = tx.objectStore("employees");
-
-  store.getAll().onsuccess = e => {
-    e.target.result.forEach(emp => {
-      if(!document.querySelector(`#sections .section[data-name="${CSS.escape(emp.name)}"]`)) {
-        createSectionElement(emp.name);
-        addSalaryRow({name: emp.name, readonlyName: true});
-        createExtraSectionElement(emp.name);
-      }
-    });
-  };
-}
-
 
 // Delegate section-level buttons
 document.querySelector('#sections').addEventListener('click', e => {
@@ -937,6 +851,13 @@ function addExtraRow(sectionName) {
         <td><input type="text" class="extra-name"></td>
         <td><input type="number" class="extra-amount" oninput="updateExtraTotal('${sectionName}')"></td>
     `;
+
+     tr.querySelectorAll("input").forEach(i => {
+    i.addEventListener("input", () => {
+      updateExtraTotal(sectionName);
+      saveExtrasData();
+    });
+  });
 
     tbody.appendChild(tr);
 }
@@ -1393,7 +1314,99 @@ function exportAllEmployeesPDF() {
   doc.save(`${from}_to_${to}.pdf`);
 }
 
+function saveSalaryData() {
+  const data = [];
 
+  document.querySelectorAll("#salaryTable tbody tr").forEach(tr => {
+    const row = {};
+    tr.querySelectorAll("input").forEach(inp => {
+      if (inp.name) row[inp.name] = inp.value;
+    });
+    row.name = tr.dataset.name || tr.querySelector('input[type="text"]').value;
+    data.push(row);
+  });
+
+  localStorage.setItem("salaryData", JSON.stringify(data));
+}
+
+function loadSalaryData() {
+  const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
+  saved.forEach(row => {
+    addSalaryRow({
+      ...row,
+      name: row.name,
+      readonlyName: true
+    });
+  });
+}
+
+function saveExtrasData() {
+  const data = {};
+
+  document.querySelectorAll(".extra-section").forEach(section => {
+    const name = section.dataset.name.replace("_extra", "");
+    data[name] = [];
+
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      data[name].push({
+        extraName: tr.querySelector(".extra-name").value,
+        amount: tr.querySelector(".extra-amount").value
+      });
+    });
+  });
+
+  localStorage.setItem("extrasData", JSON.stringify(data));
+}
+
+function loadExtrasData() {
+  const saved = JSON.parse(localStorage.getItem("extrasData") || "{}");
+
+  Object.keys(saved).forEach(name => {
+    if (!document.querySelector(`#extraTable-${name}`)) {
+      createExtraSectionElement(name);
+    }
+
+    const tbody = document.querySelector(`#extraTable-${name} tbody`);
+    tbody.innerHTML = "";
+
+    saved[name].forEach(row => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="text" class="extra-name" value="${row.extraName}"></td>
+        <td><input type="number" class="extra-amount" value="${row.amount}"></td>
+      `;
+
+      tr.querySelectorAll("input").forEach(i => {
+        i.addEventListener("input", () => {
+          updateExtraTotal(name);
+          saveExtrasData();
+        });
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    updateExtraTotal(name);    
+  });
+}
+
+
+function loadWeeklyData() {
+  const saved = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+  Object.keys(saved).forEach(name => {
+    const section = createSectionElement(name);
+    saved[name].forEach(row => {
+      appendRowToSection(section, {
+        date: row.date,
+        day_shift: row.day,
+        night_shift: row.night
+      });
+    });
+  });
+}
+loadWeeklyData();
+loadSalaryData();
+loadExtrasData();
 
 
 
