@@ -609,6 +609,8 @@ function calculateRowTotal(row) {
   row.querySelector('input[name="bonus"]').value = bonus.toFixed(2);
 
   row.querySelector('input[name="finalAmount"]').value = (paid+bonus).toFixed(2);
+
+  saveSalaryData();
 }
 
 // ------------------- Weekly Points Section -------------------
@@ -1331,6 +1333,9 @@ function saveSalaryData() {
 
 function loadSalaryData() {
   const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
+  //  const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
+  const tbody = document.querySelector("#salaryTable tbody");
+  tbody.innerHTML = ""; // 🔥 clear before loading
   saved.forEach(row => {
     addSalaryRow({
       ...row,
@@ -1407,6 +1412,11 @@ function loadWeeklyData() {
 loadWeeklyData();
 loadSalaryData();
 loadExtrasData();
+
+window.addEventListener("beforeunload", () => {
+  saveSalaryData();
+  saveExtrasData();
+});
 
 
 
