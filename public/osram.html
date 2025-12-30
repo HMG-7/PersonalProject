@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00FF00">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Dashboard - OM SRI RAM TRADERS</title>
@@ -53,6 +55,22 @@
     color: #00FF00;
     flex: 1;
   }
+
+  .btn-export-all{
+  padding:10px 18px;
+  font-size:15px;
+  font-weight:600;
+  background:#00FF00;
+  color:#080808;
+  border:none;
+  border-radius:6px;
+  cursor:pointer;
+  height: fit-content;
+ 
+
+}
+.btn-export-all:hover{opacity:.9}
+
 
   .navbar .datetime {
     color: #00FF00;
@@ -120,7 +138,7 @@
   }
 
   tr:nth-child(even) td {
-    background-color: rgba(0,255,0,0.1);
+    background-color: rgba(201, 218, 201, 0.1);
   }
 
   td input {
@@ -236,6 +254,53 @@
     border-radius: 5px;
   }
 
+  /* EXTRA SECTION HIGHLIGHT */
+.extra-section .box {
+  display: flex;
+  gap: 30px;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.extra-section label {
+  font-weight: 600;
+  font-size: 14px;
+  display: block;
+}
+
+.extra-section input[id^="extra-"] {
+  font-size: 22px;
+  font-weight: bold;
+  /* padding: 10px 14px; */
+  width: 200px;
+  border-radius: 8px;
+  border: 2px solid #00FF00;
+  background: #000;
+  color: #00FF00;
+  text-align: center;
+  box-shadow: 0 0 12px rgba(0,255,0,0.4);
+}
+
+/* TOTAL AMOUNT MORE PROMINENT */
+.extra-section input[id^="total-"] {
+   font-size: 22px;
+  font-weight: bold;
+  /* padding: 10px 14px; */
+  width: 200px;
+  border-radius: 8px;
+  border: 2px solid #00FF00;
+  background: #000;
+  color: #00FF00;
+  text-align: center;
+  box-shadow: 0 0 12px rgba(0,255,0,0.4);
+}
+
+.ex-container{
+  display:flex;
+  justify-content: flex-end;
+
+}
+
 </style>
 </head>
 <body>
@@ -323,7 +388,13 @@
 
   <!-- Extras Section -->
    <div id="extras" class="section-container">
+    
   <h2>Extras</h2>
+  <div class="ex-container">
+  <button class="btn-export-all" onclick="exportAllEmployeesPDF()">
+  Export All Employees (PDF)
+</button>
+</div>
 <div id="extraSections"></div>
   
   
@@ -334,11 +405,58 @@
 
 
 <script>
+  
   // Section toggle
   function showSection(id) {
     document.querySelectorAll('.section-container').forEach(sec => sec.classList.remove('active'));
     document.getElementById(id).classList.add('active');
+
+    if (id === 'extras') {
+    refreshExtrasSection();
   }
+
+  }
+
+
+  function refreshExtrasSection() {
+  document.querySelectorAll('.extra-section').forEach(section => {
+    const name = section.dataset.name.replace('_extra', '');
+
+    const paidSalary = getPaidSalary(name);
+
+    const paidInput = section.querySelector(`#extra-${name}`);
+    const totalInput = section.querySelector(`#total-${name}`);
+
+    if (paidInput) paidInput.value = paidSalary;
+
+    // Recalculate extras total
+    let extraTotal = 0;
+    section.querySelectorAll('.extra-amount').forEach(inp => {
+      extraTotal += Number(inp.value) || 0;
+    });
+
+    if (totalInput) totalInput.value = paidSalary + extraTotal;
+  });
+}
+
+
+function saveWeeklyData() {
+  const data = {};
+  document.querySelectorAll("#sections .section").forEach(section => {
+    const name = section.dataset.name;
+    data[name] = [];
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      data[name].push({
+        date: tr.querySelector('[name="date"]').value,
+        day: tr.querySelector('[name="day_shift"]').value,
+        night: tr.querySelector('[name="night_shift"]').value
+      });
+    });
+  });
+  localStorage.setItem("weeklyData", JSON.stringify(data));
+}
+
+
 
   // Clock and date
   function updateDateTime() {
@@ -431,6 +549,9 @@ function addSalaryRow(data={}) {
   document.querySelector('#salaryTable tbody').appendChild(tr);
   tr.querySelectorAll('input').forEach(inp => {
   inp.addEventListener('input', () => calculateRowTotal(tr));
+});
+tr.querySelectorAll("input").forEach(inp => {
+  inp.addEventListener("input", saveSalaryData);
 });
   calculateRowTotal(tr);
   // Add + and - button functionality
@@ -529,7 +650,7 @@ function appendRowToSection(sectionEl,rowData=null){
   saveBtn.addEventListener('click', ()=>{
     const inputs = tr.querySelectorAll('input');
     if(saveBtn.innerText==='Save'){
-      inputs.forEach(i=>i.disabled=true);
+      inputs.forEach(i=>i.disabled=true); 
       saveBtn.innerText='Edit';
     } else {
       inputs.forEach(i=>i.disabled=false);
@@ -546,6 +667,9 @@ function appendRowToSection(sectionEl,rowData=null){
   tr.querySelectorAll('input[name="day_shift"], input[name="night_shift"]').forEach(i=>{
     i.addEventListener('input', ()=>updateSectionPointsFromInput(i));
   });
+  tr.querySelectorAll("input").forEach(i => {
+  i.addEventListener("input", saveWeeklyData);
+});
   return tr;
 }
 
@@ -560,7 +684,15 @@ function updateSectionPointsFromInput(input){
   if(salaryRow){
     salaryRow.querySelector('input[name="points"]').value=total;
     calculateRowTotal(salaryRow);
+    updateExtraPaidSalary(name);
   }
+}
+
+function updateExtraPaidSalary(name) {
+  const paidSalary = getPaidSalary(name);
+  const salaryField = document.getElementById("salary-" + name);
+  salaryField.value = paidSalary;
+
 }
 
 function updateAllSectionTotals(){
@@ -597,7 +729,7 @@ document.querySelector(selectors.createSectionsBtn).addEventListener('click',()=
   names.forEach(n=>{
     if(!document.querySelector(`#sections .section[data-name="${CSS.escape(n)}"]`)) createSectionElement(n);
     if(!findSalaryRowByName(n)) addSalaryRow({name:n,readonlyName:true}); 
-    if(!document.querySelector(`#extraSections .extra-section[data-name="${CSS.escape(n)}"]`))
+    if(!document.querySelector(`#extraSections .extra-section[data-name="${CSS.escape(n+ "_extra")}"]`))
         createExtraSectionElement(n);
   });
 });
@@ -662,7 +794,7 @@ function formatPrettyDate(dateStr) {
 }
 
 
-calculateRowTotal(salaryRow);
+// calculateRowTotal(salaryRow);
 
 
 
@@ -674,6 +806,7 @@ function createExtraSectionElement(name) {
 
     // 🔥 Always recalc salary row before fetching
     const paidSalary = getPaidSalary(name);
+    console.log("paid", paidSalary)
 
     const div = document.createElement("div");
     div.className = "section extra-section";
@@ -683,7 +816,7 @@ function createExtraSectionElement(name) {
         <h3>${name} - Extra</h3>
         <div class="box">
             <label>Paid Salary:</label>
-            <input name="paidSalary" type="number" value="${paidSalary}" disabled>
+            <input id="extra-${name}" name="paidSalary" type="number" value="${paidSalary}" disabled>
 
             <label>Total Amount:</label>
             <input id="total-${name}" type="number" value="${paidSalary}" disabled>
@@ -700,6 +833,10 @@ function createExtraSectionElement(name) {
         </table>
 
         <button class="addRowBtn" onclick="addExtraRow('${name}')">➕ Add Extra</button>
+
+        <button class="btn" onclick="generateReport('${name}', 'excel')">📊 Export Excel</button>
+        <button class="btn" onclick="generateReport('${name}', 'pdf')">📄 Export PDF</button>
+
     `;
 
     container.appendChild(div);
@@ -714,6 +851,13 @@ function addExtraRow(sectionName) {
         <td><input type="text" class="extra-name"></td>
         <td><input type="number" class="extra-amount" oninput="updateExtraTotal('${sectionName}')"></td>
     `;
+
+     tr.querySelectorAll("input").forEach(i => {
+    i.addEventListener("input", () => {
+      updateExtraTotal(sectionName);
+      saveExtrasData();
+    });
+  });
 
     tbody.appendChild(tr);
 }
@@ -734,12 +878,535 @@ function updateExtraTotal(sectionName) {
 // Helper: get latest Paid Salary from salary table
 function getPaidSalary(name) {
     const row = findSalaryRowByName(name);
+    console.log("rpw",row)
     if (!row) return 0;
 
     calculateRowTotal(row); // 🔥 ensure latest calculation
     const paidCell = row.querySelector('input[name="paidSalary"]');
+    console.log(paidCell?.value)
     return paidCell ? parseFloat(paidCell.value) || 0 : 0;
 }
+
+function generateReport(name, type) {
+  const data = [];
+
+  /* -------- POINTS -------- */
+  document.querySelectorAll("#pointsTable tbody tr").forEach(tr => {
+    data.push({
+      Section: "Points",
+      Field: tr.children[0].innerText,
+      Value: tr.children[2].innerText
+    });
+  });
+
+  /* -------- WEEKLY -------- */
+  const section = document.querySelector(`#sections .section[data-name="${CSS.escape(name)}"]`);
+  if (section) {
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      data.push({
+        Section: "Weekly",
+        Field: tr.querySelector('input[name="date"]').value,
+        Value: `Day: ${tr.querySelector('input[name="day_shift"]').value}, Night: ${tr.querySelector('input[name="night_shift"]').value}`
+      });
+    });
+  }
+
+  /* -------- SALARY -------- */
+  const salaryRow = findSalaryRowByName(name);
+  if (salaryRow) {
+    salaryRow.querySelectorAll("input").forEach(inp => {
+      if (inp.name) {
+        data.push({
+          Section: "Salary",
+          Field: inp.name,
+          Value: inp.value
+        });
+      }
+    });
+  }
+
+  /* -------- EXTRAS -------- */
+  document.querySelectorAll(`#extraTable-${name} tbody tr`).forEach(tr => {
+    data.push({
+      Section: "Extras",
+      Field: tr.querySelector('.extra-name').value,
+      Value: tr.querySelector('.extra-amount').value
+    });
+  });
+
+  if (type === "excel") exportExcel(name, data);
+  if (type === "pdf") exportPDF(name, data);
+}
+
+function exportExcel(name, data = []) {
+  const wb = XLSX.utils.book_new();
+  const suffix = getFileSuffix();
+
+  /* -------- WEEKLY -------- */
+  const weeklyData = [];
+  const section = document.querySelector(`#sections .section[data-name="${CSS.escape(name)}"]`);
+
+  section?.querySelectorAll("tbody tr").forEach(tr => {
+    weeklyData.push({
+      Date: tr.querySelector('[name="date"]').value,
+      DayShift: tr.querySelector('[name="day_shift"]').value,
+      NightShift: tr.querySelector('[name="night_shift"]').value
+    });
+  });
+
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(weeklyData),
+    "Weekly"
+  );
+
+  /* -------- SALARY -------- */
+  const salaryRow = findSalaryRowByName(name);
+  const salaryData = [];
+
+  salaryRow?.querySelectorAll("input").forEach(inp => {
+    if (inp.name) salaryData.push({ Field: inp.name, Value: inp.value });
+  });
+
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(salaryData),
+    "Salary"
+  );
+
+  /* -------- EXTRAS -------- */
+  const extrasData = [];
+  document.querySelectorAll(`#extraTable-${name} tbody tr`).forEach(tr => {
+    extrasData.push({
+      ExtraName: tr.querySelector(".extra-name").value,
+      Amount: tr.querySelector(".extra-amount").value
+    });
+  });
+
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet(extrasData),
+    "Extras"
+  );
+
+  /* -------- FINAL SUMMARY -------- */
+  const summary = getFinalSummary(name);
+
+  XLSX.utils.book_append_sheet(
+    wb,
+    XLSX.utils.json_to_sheet([
+      { Label: "Paid Salary", Amount: summary.paidSalary },
+      { Label: "Total Amount", Amount: summary.totalAmount }
+    ]),
+    "Final Summary"
+  );
+
+  XLSX.writeFile(wb, `${name}_${suffix}.xlsx`);
+}
+
+
+function exportPDF(name) {
+  const doc = new window.jspdf.jsPDF();
+  const { from, to } = getDateRangeRaw();
+  const suffix = getFileSuffix();
+
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+doc.setFontSize(18);
+doc.setFont(undefined, "bold");
+doc.text(
+  "OM SRI RAM TRADERS",
+  pageWidth / 2,
+  15,
+  { align: "center" }
+);
+  doc.setFontSize(14);
+  doc.text(`${name} - Salary Report`, 14, 25);
+
+// const pageWidth = doc.internal.pageSize.getWidth();
+
+doc.autoTable({
+  startY: 30,
+  head: [["DATE RANGE", ":",from + " to "+ to]],
+  theme: "grid",
+  styles: {
+    halign: "center",
+    fontStyle: "bold",
+    fontSize: 11
+  },
+   headStyles: {
+   
+    textColor: [0, 0, 0]
+  }
+
+});
+
+let y = doc.lastAutoTable.finalY + 8;
+
+  
+
+
+  
+
+  // let y = 40;
+
+  /* ---------- WEEKLY ---------- */
+  const weeklyBody = [];
+  const section = document.querySelector(`#sections .section[data-name="${CSS.escape(name)}"]`);
+
+  if (section) {
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      weeklyBody.push([
+        tr.querySelector('[name="date"]').value,
+        tr.querySelector('[name="day_shift"]').value,
+        tr.querySelector('[name="night_shift"]').value
+      ]);
+    });
+  }
+
+  doc.autoTable({
+    startY: y,
+    head: [["Date", "Day Shift", "Night Shift"]],
+    body: weeklyBody,
+    theme: "grid"
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  /* ---------- SALARY ---------- */
+  const salaryBody = [];
+  const salaryRow = findSalaryRowByName(name);
+
+  salaryRow?.querySelectorAll("input").forEach(inp => {
+    if (inp.name) salaryBody.push([inp.name, inp.value]);
+  });
+
+  doc.autoTable({
+    startY: y,
+    head: [["Salary Field", "Value"]],
+    body: salaryBody,
+    theme: "grid"
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  /* ---------- EXTRAS ---------- */
+  const extrasBody = [];
+  document.querySelectorAll(`#extraTable-${name} tbody tr`).forEach(tr => {
+    extrasBody.push([
+      tr.querySelector(".extra-name").value,
+      tr.querySelector(".extra-amount").value
+    ]);
+  });
+
+  doc.autoTable({
+    startY: y,
+    head: [["Extra Name", "Amount"]],
+    body: extrasBody,
+    theme: "grid"
+  });
+
+  y = doc.lastAutoTable.finalY + 10;
+
+  /* ---------- FINAL SUMMARY ---------- */
+  const summary = getFinalSummary(name);
+
+  doc.autoTable({
+    startY: y,
+    head: [["Final Summary", "Amount"]],
+    body: [
+      ["Paid Salary", summary.paidSalary],
+      ["Total Amount", summary.totalAmount]
+    ],
+    theme: "grid",
+    styles: { fontStyle: "bold" }
+  });
+
+  doc.save(`${name}_${suffix}.pdf`);
+}
+
+
+
+function getDateRangeText() {
+  const from = document.getElementById("fromDate")?.value;
+  const to = document.getElementById("toDate")?.value;
+
+  if (!from || !to) return "Date Range: Not Selected";
+
+  return `Date Range: ${formatPrettyDate(from)} 'to' ${formatPrettyDate(to)}`;
+}
+
+
+function getDateRangeRaw() {
+  const from = document.getElementById("fromDate")?.value || "NA";
+  const to = document.getElementById("toDate")?.value || "NA";
+  return { from, to };
+}
+
+function getFileSuffix() {
+  const { from, to } = getDateRangeRaw();
+  return `${from}_to_${to}`;
+}
+
+
+function getFinalSummary(name) {
+  const paidSalary = getPaidSalary(name);
+  let extraTotal = 0;
+
+  document.querySelectorAll(`#extraTable-${name} .extra-amount`)
+    .forEach(i => extraTotal += Number(i.value) || 0);
+
+  return {
+    paidSalary: paidSalary.toFixed(2),
+    totalAmount: (paidSalary + extraTotal).toFixed(2)
+  };
+}
+
+function safeValue(el) {
+  if (!el) return 0;
+  if (el.value === undefined || el.value === null || el.value === "") return 0;
+  return el.value;
+}
+
+function exportAllEmployeesPDF() {
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+
+  const from = document.getElementById("fromDate")?.value || "";
+  const to = document.getElementById("toDate")?.value || "";
+
+  const weeklySections = document.querySelectorAll("#sections .section");
+
+  if (!weeklySections.length) {
+    alert("No employees found");
+    return;
+  }
+
+  weeklySections.forEach((section, index) => {
+
+    if (index > 0) doc.addPage();
+
+    const name = section.dataset.name || "Employee";
+
+    /* ---------- HEADER ---------- */
+    doc.setFontSize(18);
+    doc.setFont(undefined, "bold");
+    doc.text("OM SRI RAM TRADERS", pageWidth / 2, 15, { align: "center" });
+
+    doc.setFontSize(14);
+    doc.text(`Employee Report : ${name}`, pageWidth / 2, 23, { align: "center" });
+
+    /* ---------- DATE RANGE ---------- */
+    doc.autoTable({
+  startY: 30,
+  head: [["DATE RANGE", ":",from + " to "+ to]],
+  theme: "grid",
+  styles: {
+    halign: "center",
+    fontStyle: "bold",
+    fontSize: 11
+  },
+   headStyles: {
+   
+    textColor: [0, 0, 0]
+  }
+
+});
+    let y = doc.lastAutoTable.finalY + 6;
+
+    /* ---------- WEEKLY TABLE ---------- */
+    const weeklyRows = [];
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      const tds = tr.querySelectorAll("td input");
+      weeklyRows.push([
+        safeValue(tds[0]),
+        safeValue(tds[1]),
+        safeValue(tds[2])
+      ]);
+    });
+
+    if (weeklyRows.length) {
+      doc.autoTable({
+        startY: y,
+        head: [["Date", "Day Shift", "Night Shift"]],
+        body: weeklyRows,
+        theme: "grid",
+        
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    /* ---------- SALARY TABLE (FULL SAFE) ---------- */
+    const salaryRow = findSalaryRowByName(name);
+
+    if (salaryRow) {
+      const inputs = salaryRow.querySelectorAll("input");
+
+      const salaryBody = [
+        ["Points", safeValue(inputs[1])],
+        ["Amount", safeValue(inputs[2])],
+        ["No of Paavu", safeValue(inputs[3])],
+        ["Paavu Katta", safeValue(inputs[4])],
+        ["Maistery Amount", safeValue(inputs[5])],
+        ["Advance Weekly", safeValue(inputs[6])],
+        ["Advance Monthly", safeValue(inputs[7])],
+        ["Last Week Balance", safeValue(inputs[8]?.querySelector("input"))],
+        ["Total Amount", safeValue(inputs[9])],
+        ["Round Off", safeValue(inputs[10])],
+        ["Paid Salary", safeValue(inputs[11])],
+        ["Bonus", safeValue(inputs[12])],
+        ["Final Amount", safeValue(inputs[13])]
+      ];
+
+      doc.autoTable({
+        startY: y,
+        head: [["Salary Details", "Value"]],
+        body: salaryBody,
+        theme: "grid",
+        styles: { halign: "center" },
+        
+      });
+
+      y = doc.lastAutoTable.finalY + 6;
+    }
+
+    /* ---------- EXTRA TABLE ---------- */
+    const extraTable = document.querySelector(`#extraTable-${name}`);
+    if (extraTable) {
+      const extraRows = [];
+      extraTable.querySelectorAll("tbody tr").forEach(tr => {
+        const inputs = tr.querySelectorAll("input");
+        extraRows.push([
+          safeValue(inputs[0]),
+          safeValue(inputs[1])
+        ]);
+      });
+
+      if (extraRows.length) {
+        doc.autoTable({
+          startY: y,
+          head: [["Extra Name", "Amount"]],
+          body: extraRows,
+          theme: "grid",
+         
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      }
+    }
+
+    /* ---------- FINAL TOTAL ---------- */
+    const paidSalary = safeValue(document.getElementById(`extra-${name}`));
+    const totalAmount = safeValue(document.getElementById(`total-${name}`));
+
+    doc.autoTable({
+      startY: y,
+      head: [["PAID SALARY", "TOTAL AMOUNT"]],
+      body: [[paidSalary, totalAmount]],
+      theme: "grid",
+      styles: { halign: "center", fontStyle: "bold" },
+       
+    });
+
+  });
+
+  doc.save(`${from}_to_${to}.pdf`);
+}
+
+function saveSalaryData() {
+  const data = [];
+
+  document.querySelectorAll("#salaryTable tbody tr").forEach(tr => {
+    const row = {};
+    tr.querySelectorAll("input").forEach(inp => {
+      if (inp.name) row[inp.name] = inp.value;
+    });
+    row.name = tr.dataset.name || tr.querySelector('input[type="text"]').value;
+    data.push(row);
+  });
+
+  localStorage.setItem("salaryData", JSON.stringify(data));
+}
+
+function loadSalaryData() {
+  const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
+  saved.forEach(row => {
+    addSalaryRow({
+      ...row,
+      name: row.name,
+      readonlyName: true
+    });
+  });
+}
+
+function saveExtrasData() {
+  const data = {};
+
+  document.querySelectorAll(".extra-section").forEach(section => {
+    const name = section.dataset.name.replace("_extra", "");
+    data[name] = [];
+
+    section.querySelectorAll("tbody tr").forEach(tr => {
+      data[name].push({
+        extraName: tr.querySelector(".extra-name").value,
+        amount: tr.querySelector(".extra-amount").value
+      });
+    });
+  });
+
+  localStorage.setItem("extrasData", JSON.stringify(data));
+}
+
+function loadExtrasData() {
+  const saved = JSON.parse(localStorage.getItem("extrasData") || "{}");
+
+  Object.keys(saved).forEach(name => {
+    if (!document.querySelector(`#extraTable-${name}`)) {
+      createExtraSectionElement(name);
+    }
+
+    const tbody = document.querySelector(`#extraTable-${name} tbody`);
+    tbody.innerHTML = "";
+
+    saved[name].forEach(row => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td><input type="text" class="extra-name" value="${row.extraName}"></td>
+        <td><input type="number" class="extra-amount" value="${row.amount}"></td>
+      `;
+
+      tr.querySelectorAll("input").forEach(i => {
+        i.addEventListener("input", () => {
+          updateExtraTotal(name);
+          saveExtrasData();
+        });
+      });
+
+      tbody.appendChild(tr);
+    });
+
+    updateExtraTotal(name);    
+  });
+}
+
+
+function loadWeeklyData() {
+  const saved = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+  Object.keys(saved).forEach(name => {
+    const section = createSectionElement(name);
+    saved[name].forEach(row => {
+      appendRowToSection(section, {
+        date: row.date,
+        day_shift: row.day,
+        night_shift: row.night
+      });
+    });
+  });
+}
+loadWeeklyData();
+loadSalaryData();
+loadExtrasData();
 
 
 
@@ -749,6 +1416,21 @@ function getPaidSalary(name) {
 
 </script>
 
+
+
+<!-- Excel -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+
+<!-- PDF -->
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.5.29/dist/jspdf.plugin.autotable.min.js"></script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js");
+}
+</script>
+
 </body>
 </html>
-
