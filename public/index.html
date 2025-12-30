@@ -405,6 +405,34 @@
 
 
 <script>
+
+  const DB_NAME = "OM_SRI_RAM_DB";
+const DB_VERSION = 1;
+let db;
+
+function initDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = e => {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains("salary")) {
+        db.createObjectStore("salary", { keyPath: "name" });
+      }
+      if (!db.objectStoreNames.contains("extras")) {
+        db.createObjectStore("extras", { keyPath: "name" });
+      }
+    };
+
+    request.onsuccess = e => {
+      db = e.target.result;
+      resolve(db);
+    };
+
+    request.onerror = () => reject("IndexedDB init failed");
+  });
+}
+
   
   // Section toggle
   function showSection(id) {
@@ -1316,34 +1344,46 @@ function exportAllEmployeesPDF() {
   doc.save(`${from}_to_${to}.pdf`);
 }
 
-function saveSalaryData() {
-  const data = [];
+async function saveSalaryData() {
+  if (!db) return;
+  const tx = db.transaction("salary", "readwrite");
+  const store = tx.objectStore("salary");
 
   document.querySelectorAll("#salaryTable tbody tr").forEach(tr => {
-    const row = {};
+    const data = {};
     tr.querySelectorAll("input").forEach(inp => {
-      if (inp.name) row[inp.name] = inp.value;
+      if (inp.name) data[inp.name] = inp.value;
     });
-    row.name = tr.dataset.name || tr.querySelector('input[type="text"]').value;
-    data.push(row);
-  });
-
-  localStorage.setItem("salaryData", JSON.stringify(data));
-}
-
-function loadSalaryData() {
-  const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
-  //  const saved = JSON.parse(localStorage.getItem("salaryData") || "[]");
-  const tbody = document.querySelector("#salaryTable tbody");
-  tbody.innerHTML = ""; // 🔥 clear before loading
-  saved.forEach(row => {
-    addSalaryRow({
-      ...row,
-      name: row.name,
-      readonlyName: true
-    });
+    data.name = tr.dataset.name;
+    store.put(data);
   });
 }
+
+
+async function loadSalaryData() {
+  if (!db) return;
+
+  const tx = db.transaction("salary", "readonly");
+  const store = tx.objectStore("salary");
+  const request = store.getAll();
+
+  request.onsuccess = () => {
+    const rows = request.result || [];
+    const tbody = document.querySelector("#salaryTable tbody");
+    tbody.innerHTML = "";
+
+    rows.forEach(row => {
+      addSalaryRow({
+        ...row,
+        name: row.name,
+        readonlyName: true
+      });
+    });
+  };
+}
+
+
+
 
 function saveExtrasData() {
   const data = {};
@@ -1413,11 +1453,18 @@ loadWeeklyData();
 loadSalaryData();
 loadExtrasData();
 
+
+
 window.addEventListener("beforeunload", () => {
   saveSalaryData();
   saveExtrasData();
 });
 
+(async function () {
+  await initDB();
+  loadSalaryData();
+  loadExtrasData();
+})();
 
 
 
