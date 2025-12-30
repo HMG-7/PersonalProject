@@ -1365,22 +1365,25 @@ async function loadSalaryData() {
 
   const tx = db.transaction("salary", "readonly");
   const store = tx.objectStore("salary");
-  const request = store.getAll();
+  const req = store.getAll();
 
-  request.onsuccess = () => {
-    const rows = request.result || [];
-    const tbody = document.querySelector("#salaryTable tbody");
-    tbody.innerHTML = "";
+  req.onsuccess = () => {
+    const records = req.result || [];
 
-    rows.forEach(row => {
-      addSalaryRow({
-        ...row,
-        name: row.name,
-        readonlyName: true
+    records.forEach(data => {
+      const tr = createSalaryRowIfNotExists(data.name);
+
+      tr.querySelectorAll("input").forEach(inp => {
+        if (data[inp.name] !== undefined) {
+          inp.value = data[inp.name];
+        }
       });
+
+      calculateRowTotal(tr);
     });
   };
 }
+
 
 
 
