@@ -603,6 +603,18 @@ plusBtn.addEventListener('click', () => {
 
 }
 
+function createSalaryRowIfNotExists(name) {
+  let row = findSalaryRowByName(name);
+
+  if (!row) {
+    addSalaryRow({ name: name, readonlyName: true });
+    row = findSalaryRowByName(name);
+  }
+
+  return row;
+}
+
+
 // ------------------- Salary Calculation -------------------
 function calculateRowTotal(row) {
   if(!row) return;
@@ -1453,8 +1465,7 @@ function loadWeeklyData() {
   });
 }
 loadWeeklyData();
-loadSalaryData();
-loadExtrasData();
+
 
 
 
