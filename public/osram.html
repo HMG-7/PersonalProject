@@ -545,6 +545,11 @@ function createSalaryRowElement(data = {}) {
   const nameVal = data.name || '';
 tr.dataset.name = nameVal;   // ALWAYS SET
 
+ if (data.name) {
+    tr.dataset.name = data.name.trim().toLowerCase();
+  }
+
+
 
 
   tr.innerHTML = `
@@ -758,14 +763,13 @@ function updateAllSectionTotals(){
 // }
 
 function findSalaryRowByName(name) {
-  name = name.trim().toLowerCase();
+  if (!name) return null;
 
-  return [...document.querySelectorAll('#salaryTable tbody tr')]
-    .find(row => {
-      const nameInput = row.querySelector('input[type="text"]');
-      return nameInput && nameInput.value.trim().toLowerCase() === name;
-    });
+  return document.querySelector(
+    `#salaryTable tbody tr[data-name="${name.trim().toLowerCase()}"]`
+  );
 }
+
 
 
 function showToast(msg,isError=false){
@@ -1493,16 +1497,16 @@ function loadWeeklyData() {
 
   req.onsuccess = () => {
     req.result.forEach(({ name }) => {
-      if (!findSalaryRowByName(name)) {
-        addSalaryRow({ name });
+      const cleanName = name.trim().toLowerCase();
+
+      if (!findSalaryRowByName(cleanName)) {
+        addSalaryRow({ name: cleanName });
       }
     });
 
     saveSalaryData();
   };
 }
-
-
 
 
 function syncSalaryRowsFromWeekly() {
