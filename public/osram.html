@@ -665,7 +665,7 @@ function createSectionElement(name){
   if(document.querySelector(`#sections .section[data-name="${CSS.escape(name)}"]`)) return null;
   const div = document.createElement('div');
   div.className='section';
-  div.dataset.name=name;
+  div.dataset.name=name.trim().toLowerCase();;
   div.innerHTML=`
     <div style="display:flex; justify-content:space-between; align-items:center;">
       <strong class="section-title">${name}</strong>
@@ -763,12 +763,15 @@ function updateAllSectionTotals(){
 // }
 
 function findSalaryRowByName(name) {
-  if (!name) return null;
+  name = name.trim().toLowerCase();
 
-  return document.querySelector(
-    `#salaryTable tbody tr[data-name="${name.trim().toLowerCase()}"]`
-  );
+  return [...document.querySelectorAll("#salaryTable tbody tr")]
+    .find(tr => {
+      const nameInput = tr.querySelector('input[name="name"], input[type="text"]');
+      return nameInput && nameInput.value.trim().toLowerCase() === name;
+    });
 }
+
 
 
 
@@ -1489,25 +1492,22 @@ function loadWeeklyData() {
 
  
 
- async function autoCreateSalaryFromWeekly() {
-  const tx = db.transaction("weekly", "readonly");
-  const store = tx.objectStore("weekly");
+ function autoCreateSalaryFromWeekly() {
+  // 🔥 Read names DIRECTLY from weekly section DOM
+  const weeklyNames = [...document.querySelectorAll(".weekly-section")]
+    .map(sec => sec.dataset.name || sec.querySelector(".section-title")?.textContent)
+    .filter(Boolean)
+    .map(n => n.trim().toLowerCase());
 
-  const req = store.getAll();
+  weeklyNames.forEach(name => {
+    if (!findSalaryRowByName(name)) {
+      addSalaryRow({ name });
+    }
+  });
 
-  req.onsuccess = () => {
-    req.result.forEach(({ name }) => {
-      const cleanName = name.trim().toLowerCase();
-
-      if (!findSalaryRowByName(cleanName)) {
-        addSalaryRow({ name: cleanName });
-      }
-    });
-
-    saveSalaryData();
-  };
+  saveSalaryData();
 }
-
+       
 
 function syncSalaryRowsFromWeekly() {
   // Get weekly data from localStorage
