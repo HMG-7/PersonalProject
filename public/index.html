@@ -753,9 +753,20 @@ function updateAllSectionTotals(){
 }
 
 // ------------------- Helpers -------------------
-function findSalaryRowByName(name){
-  return Array.from(document.querySelectorAll('#salaryTable tbody tr')).find(r=>r.dataset.name===name);
+// function findSalaryRowByName(name){
+//   return Array.from(document.querySelectorAll('#salaryTable tbody tr')).find(r=>r.dataset.name===name);
+// }
+
+function findSalaryRowByName(name) {
+  name = name.trim().toLowerCase();
+
+  return [...document.querySelectorAll('#salaryTable tbody tr')]
+    .find(row => {
+      const nameInput = row.querySelector('input[type="text"]');
+      return nameInput && nameInput.value.trim().toLowerCase() === name;
+    });
 }
+
 
 function showToast(msg,isError=false){
   const t=document.createElement('div');
@@ -1478,25 +1489,19 @@ function loadWeeklyData() {
   const tx = db.transaction("weekly", "readonly");
   const store = tx.objectStore("weekly");
 
-  const request = store.getAll();
+  const req = store.getAll();
 
-  request.onsuccess = () => {
-    const weeklyRecords = request.result;
-
-    weeklyRecords.forEach(record => {
-      const name = record.name;
-
+  req.onsuccess = () => {
+    req.result.forEach(({ name }) => {
       if (!findSalaryRowByName(name)) {
-        addSalaryRow({
-          name,
-          readonlyName: true
-        });
+        addSalaryRow({ name });
       }
     });
 
-    saveSalaryData(); // persist salary rows
+    saveSalaryData();
   };
 }
+
 
 
 
@@ -1527,12 +1532,13 @@ window.addEventListener("beforeunload", () => {
   saveExtrasData();
 });
 
-(async function () {
+(async function initApp() {
   await initDB();
+
   loadSalaryData();
   loadWeeklyData();
-  loadExtrasData();
-   setTimeout(autoCreateSalaryFromWeekly, 200);
+
+  setTimeout(autoCreateSalaryFromWeekly, 300);
 })();
 
 
