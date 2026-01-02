@@ -543,7 +543,7 @@ renderPointsTable();
 function createSalaryRowElement(data = {}) {
   const tr = document.createElement('tr');
   const nameVal = data.name || '';
-  if (nameVal) tr.dataset.name = nameVal;
+  tr.dataset.name = nameVal; 
 
   tr.innerHTML = `
     <td><input type="text" value="${nameVal}" ${data.readonlyName?'readonly':''}></td>
