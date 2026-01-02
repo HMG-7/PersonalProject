@@ -1452,7 +1452,6 @@ function loadExtrasData() {
   });
 }
 
-
 function loadWeeklyData() {
   const saved = JSON.parse(localStorage.getItem("weeklyData") || "{}");
 
@@ -1468,11 +1467,30 @@ function loadWeeklyData() {
     });
   });
 
-  // 🔥 AFTER weekly sections are created
-  syncSalaryRowsFromWeekly();
+  // 🔥 AUTO SYNC SALARY (NO BUTTON CLICK)
+  autoCreateSalaryFromWeekly();
 }
 
-// loadWeeklyData();
+
+ loadWeeklyData();
+
+ function autoCreateSalaryFromWeekly() {
+  const weeklyData = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+
+  Object.keys(weeklyData).forEach(name => {
+    // Create salary row ONLY if missing
+    if (!findSalaryRowByName(name)) {
+      addSalaryRow({
+        name: name,
+        readonlyName: true
+      });
+    }
+  });
+
+  // Persist changes
+  saveSalaryData();
+}
+
 
 function syncSalaryRowsFromWeekly() {
   // Get weekly data from localStorage
