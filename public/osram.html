@@ -1473,6 +1473,8 @@ function loadExtrasData() {
 function loadWeeklyData() {
   const saved = JSON.parse(localStorage.getItem("weeklyData") || "{}");
 
+  let createdCount = 0;
+
   Object.keys(saved).forEach(name => {
     const section = createSectionElement(name);
 
@@ -1483,11 +1485,16 @@ function loadWeeklyData() {
         night_shift: row.night
       });
     });
+
+    createdCount++;
   });
 
-  // 🔥 AUTO SYNC SALARY (NO BUTTON CLICK)
-  autoCreateSalaryFromWeekly();
+  // 🔥 GUARANTEED: weekly DOM is ready
+  if (createdCount > 0) {
+    autoCreateSalaryFromWeekly();
+  }
 }
+
 
 
  
@@ -1536,9 +1543,23 @@ window.addEventListener("beforeunload", () => {
   saveExtrasData();
 });
 
+function watchWeeklySections() {
+  const container = document.querySelector("#weeklyContainer");
+
+  const observer = new MutationObserver(() => {
+    if (document.querySelector(".weekly-section")) {
+      autoCreateSalaryFromWeekly();
+      observer.disconnect(); // run ONCE
+    }
+  });
+
+  observer.observe(container, { childList: true });
+}
+
+
 (async function initApp() {
   await initDB();
-
+watchWeeklySections();
   loadSalaryData();
   loadWeeklyData();
 
