@@ -1472,24 +1472,32 @@ function loadWeeklyData() {
 }
 
 
- loadWeeklyData();
+ 
 
- function autoCreateSalaryFromWeekly() {
-  const weeklyData = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+ async function autoCreateSalaryFromWeekly() {
+  const tx = db.transaction("weekly", "readonly");
+  const store = tx.objectStore("weekly");
 
-  Object.keys(weeklyData).forEach(name => {
-    // Create salary row ONLY if missing
-    if (!findSalaryRowByName(name)) {
-      addSalaryRow({
-        name: name,
-        readonlyName: true
-      });
-    }
-  });
+  const request = store.getAll();
 
-  // Persist changes
-  saveSalaryData();
+  request.onsuccess = () => {
+    const weeklyRecords = request.result;
+
+    weeklyRecords.forEach(record => {
+      const name = record.name;
+
+      if (!findSalaryRowByName(name)) {
+        addSalaryRow({
+          name,
+          readonlyName: true
+        });
+      }
+    });
+
+    saveSalaryData(); // persist salary rows
+  };
 }
+
 
 
 function syncSalaryRowsFromWeekly() {
@@ -1522,8 +1530,9 @@ window.addEventListener("beforeunload", () => {
 (async function () {
   await initDB();
   loadSalaryData();
+  loadWeeklyData();
   loadExtrasData();
-  loadExtrasData();
+   setTimeout(autoCreateSalaryFromWeekly, 200);
 })();
 
 
