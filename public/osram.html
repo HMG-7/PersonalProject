@@ -543,7 +543,9 @@ renderPointsTable();
 function createSalaryRowElement(data = {}) {
   const tr = document.createElement('tr');
   const nameVal = data.name || '';
-   tr.dataset.name = nameVal;
+tr.dataset.name = nameVal;   // ALWAYS SET
+
+
 
   tr.innerHTML = `
     <td><input type="text" value="${nameVal}" ${data.readonlyName?'readonly':''}></td>
@@ -1453,8 +1455,10 @@ function loadExtrasData() {
 
 function loadWeeklyData() {
   const saved = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+
   Object.keys(saved).forEach(name => {
     const section = createSectionElement(name);
+
     saved[name].forEach(row => {
       appendRowToSection(section, {
         date: row.date,
@@ -1463,8 +1467,31 @@ function loadWeeklyData() {
       });
     });
   });
+
+  // 🔥 AFTER weekly sections are created
+  syncSalaryRowsFromWeekly();
 }
-loadWeeklyData();
+
+// loadWeeklyData();
+
+function syncSalaryRowsFromWeekly() {
+  // Get weekly data from localStorage
+  const weeklyData = JSON.parse(localStorage.getItem("weeklyData") || "{}");
+
+  Object.keys(weeklyData).forEach(name => {
+    // If salary row doesn't exist, create it
+    if (!findSalaryRowByName(name)) {
+      addSalaryRow({
+        name: name,
+        readonlyName: true
+      });
+    }
+  });
+
+  // Persist newly created rows
+  saveSalaryData();
+}
+
 
 
 
@@ -1477,6 +1504,7 @@ window.addEventListener("beforeunload", () => {
 (async function () {
   await initDB();
   loadSalaryData();
+  loadExtrasData();
   loadExtrasData();
 })();
 
